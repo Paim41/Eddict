@@ -20,6 +20,7 @@ import type { StoredProject } from "./editor";
 import { Inspector, ExportDialog } from "./Panels";
 import type { Tool } from "./Panels";
 import VideoStudio from "./VideoStudio";
+import Compare from "./Compare";
 const tools = [
   ["Crop & resize", Crop],
   ["Add photo", ImagePlus],
@@ -33,7 +34,7 @@ export default function App() {
     host = useRef<HTMLDivElement>(null),
     input = useRef<HTMLInputElement>(null),
     engine = useRef<Editor | null>(null),
-    mode = useRef<"new" | "image" | "sticker">("new");
+    mode = useRef<"new" | "image" | "sticker" | "replace">("new");
   const [editor, setEditor] = useState<Editor | null>(null),
     [, refresh] = useState(0),
     [view, setView] = useState<"home" | "editor" | "video">("home"),
@@ -45,6 +46,7 @@ export default function App() {
     [saved, setSaved] = useState<StoredProject>(),
     [videoFile, setVideoFile] = useState<File>();
   const [dragging, setDragging] = useState(false);
+  const [comparing, setComparing] = useState(false);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined,
   );
@@ -85,7 +87,7 @@ export default function App() {
       setBusy(false);
     }
   }
-  function choose(m: "new" | "image" | "sticker") {
+  function choose(m: "new" | "image" | "sticker" | "replace") {
     mode.current = m;
     if (input.current) {
       input.current.accept =
@@ -95,7 +97,10 @@ export default function App() {
       input.current.click();
     }
   }
-  async function importFile(file: File, m: "new" | "image" | "sticker") {
+  async function importFile(
+    file: File,
+    m: "new" | "image" | "sticker" | "replace",
+  ) {
     const e = engine.current;
     if (!e) return;
     if (
@@ -106,7 +111,10 @@ export default function App() {
       )
     )
       return;
-    await e.importImage(await fileURL(file, m === "sticker"), file.name, m);
+    if (m === "replace") await e.replacePhoto(await fileURL(file), file.name);
+    else
+      await e.importImage(await fileURL(file, m === "sticker"), file.name, m);
+    setComparing(false);
     setView("editor");
     setTool(m === "new" ? "Filters" : "Layers");
     setSheet(true);
@@ -406,6 +414,7 @@ export default function App() {
                   toast("Apply or cancel your crop before switching tools.");
                   return;
                 }
+                setComparing(false);
                 setTool(name);
                 setSheet(true);
               }}
@@ -443,16 +452,25 @@ export default function App() {
             <span>
               {editor?.crop ? "CROP YOUR CANVAS" : "YOUR CREATIVE SPACE"}
             </span>
+            <button
+              className={"compare-toggle " + (comparing ? "active" : "")}
+              aria-pressed={comparing}
+              disabled={busy || !!editor?.crop}
+              onClick={() => setComparing(!comparing)}
+            >
+              Before / After
+            </button>
             <span>{busy ? "Working…" : "Stored on this device"}</span>
           </div>
           <div ref={host} className="canvas-host">
             <canvas ref={canvas} />
+            {comparing && editor && <Compare editor={editor} />}
           </div>
           <div className="workspace-footer">
             <span>
               {editor?.width} × {editor?.height} px
             </span>
-            <span>Drag to move · Corners to resize</span>
+            <span>Base photo locked · Drag added layers to move</span>
             <button onClick={() => editor?.fit()} title="Fit canvas to screen">
               Fit {Math.round((editor?.canvas.getZoom() || 1) * 100)}%
             </button>
@@ -460,6 +478,7 @@ export default function App() {
         </main>
         {editor && (
           <Inspector
+            busy={busy}
             editor={editor}
             tool={tool}
             upload={choose}
@@ -468,24 +487,27 @@ export default function App() {
           />
         )}
       </div>
-      {view === "video" && (
-        <VideoStudio
-          initialFile={videoFile}
-          onClose={() => setView(active ? "editor" : "home")}
-          onEdit={async (url) => {
-            if (
-              editor?.ready &&
-              !window.confirm(
-                "Open this frame as a new project? Export your current edit first if you want to keep it.",
+      {
+        <div style={{ display: view === "video" ? "contents" : "none" }}>
+          <VideoStudio
+            active={view === "video"}
+            initialFile={videoFile}
+            onClose={() => setView(active ? "editor" : "home")}
+            onEdit={async (url) => {
+              if (
+                editor?.ready &&
+                !window.confirm(
+                  "Open this frame as a new project? Export your current edit first if you want to keep it.",
+                )
               )
-            )
-              return;
-            await editor?.importImage(url, "Video frame", "new", true);
-            setTool("Filters");
-            setView("editor");
-          }}
-        />
-      )}
+                return;
+              await editor?.importImage(url, "Video frame", "new", true);
+              setTool("Filters");
+              setView("editor");
+            }}
+          />
+        </div>
+      }
       {exporting && editor && (
         <ExportDialog
           editor={editor}

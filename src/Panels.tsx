@@ -32,49 +32,53 @@ export function Inspector({
   upload,
   run,
   close,
+  busy,
 }: {
+  busy: boolean;
   editor: Editor;
   tool: Tool;
-  upload: (mode: "image" | "sticker") => void;
+  upload: (mode: "image" | "sticker" | "replace") => void;
   run: (fn: () => void | Promise<void>) => void;
   close: () => void;
 }) {
   return (
     <aside className="inspector">
-      <div className="panel-heading">
-        <h2>{tool}</h2>
-        <button
-          className="icon-button sheet-close"
-          onClick={close}
-          aria-label="Close tool panel"
-        >
-          <X size={18} />
-        </button>
-      </div>
-      {tool === "Crop & resize" ? (
-        <CropPanel editor={e} run={run} />
-      ) : tool === "Add photo" ? (
-        <>
-          <p className="muted">Build a little more into your moment.</p>
-          <button className="upload-card" onClick={() => upload("image")}>
-            <Upload size={26} />
-            <b>Add a photo</b>
-            <span>JPEG, PNG or WebP</span>
+      <fieldset className="inspector-controls" disabled={busy}>
+        <div className="panel-heading">
+          <h2>{tool}</h2>
+          <button
+            className="icon-button sheet-close"
+            onClick={close}
+            aria-label="Close tool panel"
+          >
+            <X size={18} />
           </button>
-          <p className="fine">
-            Every photo is its own layer. Drag the corners to resize, or the top
-            handle to rotate.
-          </p>
-        </>
-      ) : tool === "Stickers" ? (
-        <StickerPanel editor={e} upload={() => upload("sticker")} run={run} />
-      ) : tool === "Filters" ? (
-        <FilterPanel editor={e} run={run} />
-      ) : tool === "Adjust" ? (
-        <AdjustPanel editor={e} />
-      ) : (
-        <LayersPanel editor={e} run={run} />
-      )}
+        </div>
+        {tool === "Crop & resize" ? (
+          <CropPanel editor={e} run={run} />
+        ) : tool === "Add photo" ? (
+          <>
+            <p className="muted">Build a little more into your moment.</p>
+            <button className="upload-card" onClick={() => upload("image")}>
+              <Upload size={26} />
+              <b>Add a photo</b>
+              <span>JPEG, PNG or WebP</span>
+            </button>
+            <p className="fine">
+              Every photo is its own layer. Drag the corners to resize, or the
+              top handle to rotate.
+            </p>
+          </>
+        ) : tool === "Stickers" ? (
+          <StickerPanel editor={e} upload={() => upload("sticker")} run={run} />
+        ) : tool === "Filters" ? (
+          <FilterPanel editor={e} run={run} />
+        ) : tool === "Adjust" ? (
+          <AdjustPanel editor={e} />
+        ) : (
+          <LayersPanel editor={e} run={run} replace={() => upload("replace")} />
+        )}
+      </fieldset>
     </aside>
   );
 }
@@ -135,8 +139,8 @@ function CropPanel({
       {e.crop && (
         <>
           <p className="fine">
-            Drag the pink crop frame or its handles. Select the photo to
-            reposition it beneath the frame.
+            Drag the pink crop frame or its handles. Use photo zoom to adjust
+            the framing without accidental dragging.
           </p>
           <label>
             Photo zoom · {Math.round(zoom * 100)}%
@@ -283,11 +287,23 @@ function StickerPanel({
                       reject(new Error("Could not read the sticker."));
                     reader.readAsDataURL(blob);
                   });
-                  await e.importImage(data, s.name, "sticker");
+                  await e.importImage(data, s.name, "sticker", false, s.bounds);
                 })
               }
             >
-              <img src={s.url} alt={s.name} />
+              <svg
+                viewBox={`0 0 ${s.bounds[2]} ${s.bounds[3]}`}
+                role="img"
+                aria-label={s.name}
+              >
+                <image
+                  href={s.url}
+                  x={-s.bounds[0]}
+                  y={-s.bounds[1]}
+                  width={s.width}
+                  height={s.height}
+                />
+              </svg>
               <span>{s.name}</span>
             </button>
           ))}
@@ -490,10 +506,11 @@ function AdjustPanel({ editor: e }: { editor: Editor }) {
   function flush(commit: boolean) {
     clearTimeout(timer.current);
     if (!pending.current) return;
-    e.look(image?.filterStack || [], next.current, false);
+    void e
+      .look(image?.filterStack || [], next.current, commit)
+      .catch((error) => e.onError(String(error)));
     if (commit) {
       pending.current = false;
-      e.commit();
     }
   }
   useEffect(
@@ -534,7 +551,9 @@ function AdjustPanel({ editor: e }: { editor: Editor }) {
           const v = defaults();
           setValues(v);
           next.current = v;
-          e.look(image.filterStack || [], v);
+          void e
+            .look(image.filterStack || [], v)
+            .catch((error) => e.onError(String(error)));
         }}
       >
         Reset adjustments
@@ -545,7 +564,9 @@ function AdjustPanel({ editor: e }: { editor: Editor }) {
 function LayersPanel({
   editor: e,
   run,
+  replace,
 }: {
+  replace: () => void;
   editor: Editor;
   run: (fn: () => void | Promise<void>) => void;
 }) {
@@ -591,6 +612,12 @@ function LayersPanel({
             <button
               aria-label={`${layer.locked ? "Unlock" : "Lock"} ${layer.name}`}
               className="icon-button"
+              disabled={layer.layerType === "base-image"}
+              title={
+                layer.layerType === "base-image"
+                  ? "The base photo stays locked to prevent accidental dragging"
+                  : undefined
+              }
               onClick={() => e.toggleLock(layer)}
             >
               {layer.locked ? <Lock size={15} /> : <Unlock size={15} />}
@@ -624,6 +651,12 @@ function LayersPanel({
               onKeyUp={() => e.commit()}
             />
           </label>
+          {selected.layerType !== "sticker" && (
+            <button className="wide" onClick={replace}>
+              <Upload size={16} />
+              Replace photo
+            </button>
+          )}
           <div className="layer-actions">
             <button onClick={() => run(() => e.duplicate())}>
               <Copy size={16} />

@@ -24,6 +24,9 @@ test("native-resolution video capture, PNG/JPG download and edit handoff", async
   await page
     .getByRole("button", { name: "Capture frame", exact: true })
     .click();
+  await expect(
+    page.getByRole("button", { name: "Download PNG", exact: true }),
+  ).toBeEnabled();
   await expect(page.locator(".capture-preview")).toBeVisible();
   expect(
     await page

@@ -14,9 +14,19 @@ A browser-based, local-first photo editor and native-resolution video frame capt
 - Falling Sakura behind the interface, capped at 200 petals, paused when the tab is hidden, disabled with reduced-motion preferences. Sakura is never included in exports.
 - Desktop inspector and mobile bottom toolbar/panel.
 
-## Sticker assets pending
+## Stickers and comparison
 
-The old built-in sticker collection has been removed. `HANAELLIESH STICKER.png` and `LOVE PAINT STICKER.png` were not present at the supplied paths and could not be attached. No substitutes are bundled. Reattach the two originals to complete the built-in collection. User sticker upload remains available.
+The supplied Paint and Hanaelliesh watermark PNGs are included byte-for-byte with their transparency. Only the visible bounds are used when placing them, so their large transparent margins do not make the artwork appear tiny.
+
+The base photo is locked against dragging, rotating and scaling with handles. Added photo and sticker layers remain movable. Crop and resize tools still work. Layers has a Replace photo button that keeps the filter stack and layer order, and fits a replacement base photo to cover the current canvas. Replacement is undoable.
+
+Before / After opens an adjustable split view comparing the current edited composition with the unfiltered base photo at the same crop and framing. It is a preview only and never affects exports.
+
+## Performance and video gallery
+
+Filter pixels are processed in a Web Worker using the same adjustment engine as the Adjust panel. The worker caches the last preset stack, reuses unchanged prefixes, and transfers raw pixels without reducing resolution. A specialised five-tap sharpness kernel preserves the previous convolution result. Browsers without worker support fall back to the same main-thread engine.
+
+Exports avoid resizing the interactive canvas, encode in a background worker where supported, and cache the last unchanged export. Capturing video immediately adds a small gallery thumbnail while a lossless native-resolution PNG is encoded in the background. PNG downloads reuse that blob. All finished captures can be downloaded as a ZIP. Captures stay available when switching to the editor and back, but are session-only: download them before reloading or closing the page. Two pending encodes and a 256 MB completed-gallery limit keep memory bounded.
 
 ## Stack and commands
 
@@ -49,7 +59,7 @@ npm test
 
 Photos, videos, edits and exports stay in the browser. No image or video content is transmitted to a service. IndexedDB saves the current project on this device and origin; local preview and hosted site storage are separate. Browser storage can be cleared or exhausted, so export important edits.
 
-Photo uploads are optimised above 6000 px per side or 24 megapixels. Video captures use native decoded dimensions without resizing or enhancement; direct editor handoff retains those dimensions up to the 64-megapixel safety limit. Codec availability and exact seeking depend on the browser. Frame buttons seek by 1/30 second and do not claim a measured frame rate. Large CPU-based adjustment stacks can take longer on high-resolution images.
+Photo uploads are optimised above 6000 px per side or 24 megapixels. Video captures use native decoded dimensions without resizing or enhancement; direct editor handoff retains those dimensions up to the 64-megapixel safety limit. Codec availability and exact seeking depend on the browser. Frame buttons seek by 1/30 second and do not claim a measured frame rate. Large adjustment stacks can still take longer on high-resolution images, while supported browsers keep the interface responsive during background processing.
 
 ## Licensing
 

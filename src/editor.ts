@@ -3,146 +3,15 @@ import {
   FabricImage,
   FabricObject,
   Rect,
-  filters,
-  classRegistry,
   setFilterBackend,
   Canvas2dFilterBackend,
 } from "fabric";
-import type { T2DPipelineState } from "fabric";
 setFilterBackend(new Canvas2dFilterBackend());
-export const adjustmentKeys = [
-  "brightness",
-  "contrast",
-  "saturation",
-  "exposure",
-  "temperature",
-  "tint",
-  "highlights",
-  "shadows",
-  "sharpness",
-  "blur",
-  "fade",
-  "vignette",
-] as const;
-export type Adjustment = (typeof adjustmentKeys)[number];
-export type Adjustments = Record<Adjustment, number>;
-export type Preset = "eddict-crystal" | "eddict-porcelain" | "black-aesthetic";
-export interface FilterInstance {
-  id: string;
-  preset: Preset;
-}
-export const defaults = (): Adjustments =>
-  Object.fromEntries(adjustmentKeys.map((k) => [k, 0])) as Adjustments;
-export const presets: Record<
-  Preset,
-  { name: string; adjustments: Adjustments }
-> = {
-  "eddict-crystal": {
-    name: "Eddict Crystal",
-    adjustments: {
-      brightness: 5,
-      contrast: 9,
-      saturation: -7,
-      exposure: 5,
-      temperature: -6,
-      tint: 1,
-      highlights: 6,
-      shadows: 1,
-      sharpness: 18,
-      blur: 0,
-      fade: 0,
-      vignette: 0,
-    },
-  },
-  "eddict-porcelain": {
-    name: "Eddict Porcelain",
-    adjustments: {
-      brightness: 2,
-      contrast: 5,
-      saturation: -2,
-      exposure: 2,
-      temperature: -3,
-      tint: 3,
-      highlights: 3,
-      shadows: -2,
-      sharpness: 8,
-      blur: 0,
-      fade: 1,
-      vignette: 0,
-    },
-  },
-  "black-aesthetic": {
-    name: "Black Aesthetic",
-    adjustments: {
-      brightness: -2,
-      contrast: 6,
-      saturation: -5,
-      exposure: -2,
-      temperature: -3,
-      tint: 0,
-      highlights: -7,
-      shadows: -5,
-      sharpness: 60,
-      blur: 0,
-      fade: 0,
-      vignette: 0,
-    },
-  },
-};
-export function tonePixels(
-  data: Uint8ClampedArray,
-  width: number,
-  height: number,
-  a: Adjustments,
-) {
-  const exposure = 2 ** (a.exposure / 100),
-    warmth = a.temperature * 0.32,
-    tint = a.tint * 0.22;
-  for (let i = 0; i < data.length; i += 4) {
-    const l =
-      (data[i] * 0.2126 + data[i + 1] * 0.7152 + data[i + 2] * 0.0722) / 255;
-    const lift = a.shadows * (1 - l) ** 2 * 0.7 + a.highlights * l * l * 0.65;
-    const x = (i / 4) % width,
-      y = Math.floor(i / 4 / width);
-    const edge = Math.min(
-      1,
-      ((x - width / 2) / (width / 2)) ** 2 +
-        ((y - height / 2) / (height / 2)) ** 2,
-    );
-    const v = 1 - (a.vignette / 100) * edge * 0.8;
-    for (let c = 0; c < 3; c++) {
-      let value =
-        data[i + c] * exposure +
-        lift +
-        (c === 0 ? warmth + tint : c === 1 ? -tint : -warmth + tint);
-      value = value * (1 - a.fade / 180) + a.fade * 0.65;
-      data[i + c] = value * v;
-    }
-  }
-}
-class EddictTone extends filters.BaseFilter<
-  "EddictTone",
-  { values: Adjustments }
-> {
-  static type = "EddictTone";
-  static defaults = { values: defaults() };
-  declare values: Adjustments;
-  applyTo2d({ imageData }: T2DPipelineState) {
-    tonePixels(imageData.data, imageData.width, imageData.height, this.values);
-  }
-  isNeutralState() {
-    return [
-      "exposure",
-      "temperature",
-      "tint",
-      "highlights",
-      "shadows",
-      "fade",
-      "vignette",
-    ].every((k) => this.values[k as Adjustment] === 0);
-  }
-}
-classRegistry.setClass(EddictTone);
+import { defaults, presets } from "./adjustments";
+import type { Adjustments, FilterInstance, Preset } from "./adjustments";
+import { FilterRenderer } from "./filter-renderer";
+import { encodeCanvas } from "./media";
+export * from "./adjustments";
 export type Layer = FabricObject & {
   id: string;
   name: string;
@@ -167,39 +36,6 @@ Object.assign(FabricObject.ownDefaults, {
   cornerStyle: "circle",
   cornerSize: 12,
 });
-// Each stage runs through precisely the same adjustment engine, in order.
-// Never sum preset values: clipping and sharpening make that a different result.
-export function adjustmentFilters(a: Adjustments): FabricImage["filters"] {
-  const result: FabricImage["filters"] = [
-    new EddictTone({ values: { ...a } }),
-    new filters.Brightness({ brightness: a.brightness / 100 }),
-    new filters.Contrast({ contrast: a.contrast / 100 }),
-    new filters.Saturation({ saturation: a.saturation / 100 }),
-  ];
-  if (a.sharpness > 0) {
-    const s = a.sharpness / 200;
-    result.push(
-      new filters.Convolute({
-        matrix: [0, -s, 0, -s, 1 + 4 * s, -s, 0, -s, 0],
-      }),
-    );
-  }
-  if (a.blur > 0) result.push(new filters.Blur({ blur: a.blur / 150 }));
-  return result;
-}
-export function applyLook(
-  image: FabricImage,
-  stack: FilterInstance[],
-  manual: Adjustments,
-) {
-  image.filters = [
-    ...stack.flatMap((instance) =>
-      adjustmentFilters(presets[instance.preset].adjustments),
-    ),
-    ...adjustmentFilters(manual),
-  ];
-  image.applyFilters();
-}
 export interface Snapshot {
   width: number;
   height: number;
@@ -222,6 +58,10 @@ export class Editor {
   crop: Rect | null = null;
   notify: () => void = () => {};
   onError: (m: string) => void = () => {};
+  private renderer = new FilterRenderer();
+  private renderTasks = new Set<Promise<unknown>>();
+  private revision = 0;
+  private exportCache: { key: string; blob: Blob } | undefined;
   private observer: ResizeObserver;
   private saveTimer: ReturnType<typeof setTimeout> | undefined;
   constructor(
@@ -283,6 +123,8 @@ export class Editor {
   }
   commit() {
     if (this.restoring) return;
+    this.revision++;
+    this.exportCache = undefined;
     this.history = this.history.slice(0, this.cursor + 1);
     this.history.push(this.snapshot());
     if (this.history.length > 60) this.history.shift();
@@ -302,16 +144,28 @@ export class Editor {
   }
   async restore(s: Snapshot) {
     this.restoring = true;
+    this.revision++;
+    this.exportCache = undefined;
     this.cancelCrop();
     try {
-      await this.canvas.loadFromJSON(s.canvas);
+      await this.waitForRendering();
+      const clean = {
+        ...s.canvas,
+        objects: s.canvas.objects.map((o: object) => ({ ...o, filters: [] })),
+      };
+      await this.canvas.loadFromJSON(clean);
       for (const layer of this.layers) {
         layer.filterStack = (layer.filterStack || []).filter((f) =>
           Object.hasOwn(presets, f.preset),
         );
         layer.adjustments = { ...defaults(), ...layer.adjustments };
         if (layer instanceof FabricImage)
-          applyLook(layer, layer.filterStack, layer.adjustments);
+          await this.renderer.render(
+            layer,
+            layer.filterStack,
+            layer.adjustments,
+          );
+        if (layer.layerType === "base-image") this.lockBase(layer);
       }
       this.width = s.width;
       this.height = s.height;
@@ -340,8 +194,16 @@ export class Editor {
     name: string,
     mode: "new" | "image" | "sticker" = "new",
     native = false,
+    bounds?: number[],
   ) {
     const image = await FabricImage.fromURL(url);
+    if (mode === "sticker" && bounds)
+      image.set({
+        cropX: bounds[0],
+        cropY: bounds[1],
+        width: bounds[2],
+        height: bounds[3],
+      });
     const width = image.width,
       height = image.height;
     if (!width || !height)
@@ -387,6 +249,7 @@ export class Editor {
       adjustments: defaults(),
       locked: false,
     });
+    if (mode === "new") this.lockBase(image as unknown as Layer);
     this.canvas.add(image);
     this.canvas.setActiveObject(image);
     this.fit();
@@ -423,12 +286,26 @@ export class Editor {
     const clone = (await o.clone()) as Layer;
     clone.id = crypto.randomUUID();
     clone.name = o.name + " copy";
-    clone.set({ left: o.left + 24, top: o.top + 24 });
+    clone.layerType = o.layerType === "base-image" ? "image" : o.layerType;
+    clone.locked = false;
+    clone.set({
+      left: o.left + 24,
+      top: o.top + 24,
+      lockMovementX: false,
+      lockMovementY: false,
+      lockScalingX: false,
+      lockScalingY: false,
+      lockRotation: false,
+      hasControls: true,
+    });
+    if (clone instanceof FabricImage)
+      await this.renderer.render(clone, clone.filterStack, clone.adjustments);
     this.canvas.add(clone);
     this.canvas.setActiveObject(clone);
     this.commit();
   }
   toggleLock(o: Layer) {
+    if (o.layerType === "base-image") return;
     o.locked = !o.locked;
     o.set({
       lockMovementX: o.locked,
@@ -447,20 +324,114 @@ export class Editor {
     );
     this.commit();
   }
-  look(stack: FilterInstance[], adjustments: Adjustments, commit = true) {
+  lockBase(layer: Layer) {
+    layer.locked = true;
+    layer.set({
+      lockMovementX: true,
+      lockMovementY: true,
+      lockScalingX: true,
+      lockScalingY: true,
+      lockRotation: true,
+      hasControls: false,
+      hoverCursor: "default",
+    });
+  }
+  async waitForRendering() {
+    await Promise.all([...this.renderTasks]);
+  }
+  async look(stack: FilterInstance[], adjustments: Adjustments, commit = true) {
     const o = this.selected;
     if (!(o instanceof FabricImage)) return;
     o.filterStack = stack.map((f) => ({ ...f }));
     o.adjustments = { ...adjustments };
-    applyLook(o, o.filterStack, adjustments);
-    this.canvas.requestRenderAll();
-    if (commit) this.commit();
-    else this.notify();
+    this.revision++;
+    this.exportCache = undefined;
+    this.notify();
+    const task = this.renderer.render(o, o.filterStack, adjustments);
+    this.renderTasks.add(task);
+    try {
+      const applied = await task;
+      if (applied) {
+        this.canvas.requestRenderAll();
+        if (commit) this.commit();
+        else this.notify();
+      }
+    } finally {
+      this.renderTasks.delete(task);
+    }
+  }
+  async replacePhoto(url: string, name: string) {
+    const old = this.selected;
+    if (!(old instanceof FabricImage) || old.layerType === "sticker") return;
+    const replacement = await FabricImage.fromURL(url);
+    if (replacement.width * replacement.height > 64000000) {
+      replacement.dispose();
+      throw new Error("Choose an image below 64 megapixels.");
+    }
+    Object.assign(replacement, {
+      id: old.id,
+      name: old.layerType === "base-image" ? "Base photo" : name,
+      layerType: old.layerType,
+      filterStack: old.filterStack.map((f) => ({ ...f })),
+      adjustments: { ...old.adjustments },
+      locked: old.locked,
+    });
+    const base = old.layerType === "base-image";
+    const targetW = base ? this.width : old.getScaledWidth(),
+      targetH = base ? this.height : old.getScaledHeight();
+    const scale = base
+      ? Math.max(targetW / replacement.width, targetH / replacement.height)
+      : Math.min(targetW / replacement.width, targetH / replacement.height);
+    replacement.set({
+      left: base ? (this.width - replacement.width * scale) / 2 : old.left,
+      top: base ? (this.height - replacement.height * scale) / 2 : old.top,
+      scaleX: scale,
+      scaleY: scale,
+      angle: base ? 0 : old.angle,
+      opacity: old.opacity,
+      visible: old.visible,
+      flipX: old.flipX,
+      flipY: old.flipY,
+    });
+    if (base) this.lockBase(replacement as unknown as Layer);
+    else
+      replacement.set({
+        lockMovementX: old.locked,
+        lockMovementY: old.locked,
+        lockScalingX: old.locked,
+        lockScalingY: old.locked,
+        lockRotation: old.locked,
+        hasControls: !old.locked,
+      });
+    await this.renderer.render(replacement, old.filterStack, old.adjustments);
+    const index = this.layers.indexOf(old);
+    this.canvas.remove(old);
+    this.canvas.add(replacement);
+    this.canvas.moveObjectTo(replacement, index);
+    this.select(replacement as unknown as Layer);
+    this.commit();
+    old.dispose();
+  }
+  beforeCanvas() {
+    const base = this.layers.find((l) => l.layerType === "base-image");
+    if (!(base instanceof FabricImage)) return undefined;
+    const element = base._element,
+      filtered = base._filteredEl;
+    try {
+      base._element = base._originalElement;
+      base._filteredEl = undefined;
+      base.set("dirty", true);
+      return this.canvas.toCanvasElement(1, { filter: (o) => o === base });
+    } finally {
+      base._element = element;
+      base._filteredEl = filtered;
+      base.set("dirty", true);
+    }
   }
   addFilter(preset: Preset) {
     const o = this.selected;
     if (!o) return;
-    this.look(
+    return this.look(
       [...(o.filterStack || []), { id: crypto.randomUUID(), preset }],
       o.adjustments,
     );
@@ -468,7 +439,7 @@ export class Editor {
   removeFilter(id: string) {
     const o = this.selected;
     if (o)
-      this.look(
+      return this.look(
         o.filterStack.filter((f) => f.id !== id),
         o.adjustments,
       );
@@ -481,7 +452,7 @@ export class Editor {
       to = from + delta;
     if (from < 0 || to < 0 || to >= stack.length) return;
     [stack[from], stack[to]] = [stack[to], stack[from]];
-    this.look(stack, o.adjustments);
+    return this.look(stack, o.adjustments);
   }
   resize(width: number, height: number) {
     if (!validSize(width, height))
@@ -582,47 +553,40 @@ export class Editor {
   }
   async export(format: "png" | "jpeg" | "webp", quality: number) {
     if (this.restoring) throw new Error("Wait for the current edit to finish.");
-    const viewport = this.canvas.viewportTransform.slice() as [
-        number,
-        number,
-        number,
-        number,
-        number,
-        number,
-      ],
-      dims = { width: this.canvas.width, height: this.canvas.height };
+    await this.waitForRendering();
+    const key = [this.revision, format, quality].join(":");
+    if (this.exportCache?.key === key) return this.exportCache.blob;
+    const viewport = this.canvas.viewportTransform;
     let output: HTMLCanvasElement;
     try {
-      this.canvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
-      this.canvas.setDimensions({ width: this.width, height: this.height });
+      this.canvas.viewportTransform = [1, 0, 0, 1, 0, 0];
       output = this.canvas.toCanvasElement(1, {
+        width: this.width,
+        height: this.height,
         filter: (o) => o !== this.crop,
       });
     } finally {
-      this.canvas.setDimensions(dims);
-      this.canvas.setViewportTransform(viewport);
-      this.canvas.requestRenderAll();
+      this.canvas.viewportTransform = viewport;
+      this.canvas.calcViewportBoundaries();
     }
-    if (format === "jpeg") {
-      const ctx = output.getContext("2d")!;
-      ctx.globalCompositeOperation = "destination-over";
-      ctx.fillStyle = "white";
-      ctx.fillRect(0, 0, output.width, output.height);
+    try {
+      if (format === "jpeg") {
+        const ctx = output.getContext("2d")!;
+        ctx.globalCompositeOperation = "destination-over";
+        ctx.fillStyle = "white";
+        ctx.fillRect(0, 0, output.width, output.height);
+      }
+      const blob = await encodeCanvas(output, "image/" + format, quality);
+      if (key === [this.revision, format, quality].join(":"))
+        this.exportCache = { key, blob };
+      return blob;
+    } finally {
+      output.width = 0;
+      output.height = 0;
     }
-    return new Promise<Blob>((resolve, reject) =>
-      output.toBlob(
-        (blob) => {
-          output.width = 0;
-          output.height = 0;
-          if (blob) resolve(blob);
-          else reject(new Error("Export failed. Try a smaller canvas."));
-        },
-        "image/" + format,
-        quality,
-      ),
-    );
   }
   dispose() {
+    this.renderer.dispose();
     clearTimeout(this.saveTimer);
     this.observer.disconnect();
     void this.canvas.dispose();
