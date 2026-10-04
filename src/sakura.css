@@ -1,0 +1,146 @@
+#sakura-container {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+  contain: strict;
+}
+.sakura {
+  position: absolute;
+  top: -60px;
+  width: var(--size);
+  height: calc(var(--size) * 0.75);
+  background: radial-gradient(
+    circle at 35% 30%,
+    #fff9fc 0%,
+    #ffdce7 35%,
+    #f7adc1 70%,
+    #e88da7 100%
+  );
+  border-radius: 70% 30% 65% 35% / 60% 40% 60% 40%;
+  opacity: var(--opacity);
+  animation:
+    sakuraFall var(--fall-duration) linear var(--delay) forwards,
+    sakuraSway var(--sway-duration) ease-in-out infinite alternate,
+    sakuraSpin var(--spin-duration) linear infinite;
+}
+@keyframes sakuraFall {
+  from {
+    transform: translate3d(0, -60px, 0);
+  }
+  to {
+    transform: translate3d(var(--drift), calc(100dvh + 160px), 0);
+  }
+}
+@keyframes sakuraSway {
+  from {
+    margin-left: -15px;
+  }
+  to {
+    margin-left: 25px;
+  }
+}
+@keyframes sakuraSpin {
+  from {
+    rotate: 0deg;
+  }
+  to {
+    rotate: 360deg;
+  }
+}
+.app {
+  position: relative;
+  z-index: 1;
+}
+.app.welcome {
+  background: radial-gradient(ellipse at 50% 50%, #fff4f955 0%, #ffffff55 68%);
+}
+.workspace {
+  background: #f6f4f5bb;
+}
+@media (prefers-reduced-motion: reduce) {
+  #sakura-container {
+    display: none;
+  }
+  .sakura {
+    animation: none;
+  }
+}
+.filter-card span {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.filter-card b {
+  font-size: 18px;
+  color: #a43e6b;
+}
+.filter-count {
+  border-radius: 12px;
+  background: #fff0f6;
+  padding: 3px 7px;
+  color: #a43e6b;
+  font-size: 12px;
+  margin-left: 6px;
+}
+.applied-filters {
+  list-style: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.applied-filters li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 7px 9px;
+  font-size: 12px;
+  background: #fff8fc;
+}
+.applied-filters li > div {
+  display: flex;
+  margin-left: auto;
+  gap: 0;
+}
+.applied-filters .icon-button {
+  min-width: 30px;
+  min-height: 38px;
+  padding: 4px;
+}
+.filter-order {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: #a43e6b;
+  background: white;
+  border-radius: 50%;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+}
+.custom-stickers {
+  grid-template-columns: 1fr 1fr;
+}
+.custom-stickers button {
+  aspect-ratio: auto;
+}
+.custom-stickers img {
+  height: 90px;
+}
+.custom-stickers span {
+  display: block;
+  font-size: 11px;
+}
+@media (max-width: 700px) {
+  .applied-filters .icon-button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}

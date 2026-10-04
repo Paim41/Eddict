@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.sites-runtime/
+*.tsbuildinfo
+*.zip
+test-results/
+
+.test-assets/
+playwright-report/
+.vercel/
+.openai/
+.env
+.env.*
+!.env.example
