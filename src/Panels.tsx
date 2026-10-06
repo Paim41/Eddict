@@ -227,7 +227,7 @@ function CropPanel({
                 ? [e.initial?.width || e.width, e.initial?.height || e.height]
                 : event.target.value.split("x").map(Number);
             setW(width);
-            setH(height);
+            setH(locked ? Math.round((width * e.height) / e.width) : height);
           }}
         >
           <option disabled value="">

@@ -21,6 +21,7 @@ import { Inspector, ExportDialog } from "./Panels";
 import type { Tool } from "./Panels";
 import VideoStudio from "./VideoStudio";
 import Compare from "./Compare";
+import TransformControls from "./TransformControls";
 const tools = [
   ["Crop & resize", Crop],
   ["Add photo", ImagePlus],
@@ -47,6 +48,7 @@ export default function App() {
     [videoFile, setVideoFile] = useState<File>();
   const [dragging, setDragging] = useState(false);
   const [comparing, setComparing] = useState(false);
+  const [grid, setGrid] = useState(false);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined,
   );
@@ -449,6 +451,13 @@ export default function App() {
           }}
         >
           <div className="workspace-heading">
+            <button
+              className="compare-toggle"
+              aria-pressed={grid}
+              onClick={() => setGrid(!grid)}
+            >
+              Grid
+            </button>
             <span>
               {editor?.crop ? "CROP YOUR CANVAS" : "YOUR CREATIVE SPACE"}
             </span>
@@ -464,8 +473,26 @@ export default function App() {
           </div>
           <div ref={host} className="canvas-host">
             <canvas ref={canvas} />
+            {grid && editor && (
+              <div
+                aria-label="Rule of thirds grid"
+                className="composition-grid"
+                style={{
+                  width: editor.canvas.width,
+                  height: editor.canvas.height,
+                }}
+              >
+                <i />
+                <i />
+                <i />
+                <i />
+              </div>
+            )}
             {comparing && editor && <Compare editor={editor} />}
           </div>
+          {editor && !comparing && !editor.crop && (
+            <TransformControls editor={editor} busy={busy} />
+          )}
           <div className="workspace-footer">
             <span>
               {editor?.width} × {editor?.height} px

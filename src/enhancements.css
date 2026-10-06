@@ -196,3 +196,105 @@
 .inspector-controls:disabled {
   opacity: 0.75;
 }
+.composition-grid {
+  position: absolute;
+  pointer-events: none;
+  z-index: 2;
+  overflow: hidden;
+}
+.composition-grid i {
+  position: absolute;
+  background: #fff9;
+  box-shadow: 0 0 1px #000b;
+}
+.composition-grid i:nth-child(1),
+.composition-grid i:nth-child(2) {
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  left: 33.333%;
+}
+.composition-grid i:nth-child(2) {
+  left: 66.667%;
+}
+.composition-grid i:nth-child(3),
+.composition-grid i:nth-child(4) {
+  left: 0;
+  right: 0;
+  height: 1px;
+  top: 33.333%;
+}
+.composition-grid i:nth-child(4) {
+  top: 66.667%;
+}
+.transform-controls {
+  flex-shrink: 0;
+  margin: 0 16px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: #fff;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+}
+.transform-controls legend {
+  font-size: 11px;
+  padding: 0 6px;
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.transform-controls label {
+  font-size: 12px;
+  min-width: 0;
+}
+.transform-controls input {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  margin: 0;
+  touch-action: none;
+}
+.transform-controls button {
+  min-height: 44px;
+  font-size: 12px;
+  padding: 6px 12px;
+}
+.transform-controls:disabled {
+  opacity: 0.6;
+}
+.upper-canvas {
+  touch-action: none;
+}
+@media (max-width: 700px) {
+  .workspace-heading {
+    flex-shrink: 0;
+    gap: 8px;
+    min-height: 48px;
+  }
+  .workspace-heading > span {
+    display: none;
+  }
+  .workspace-heading button {
+    min-height: 44px;
+  }
+  .transform-controls {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0 12px;
+    margin: 0 10px;
+    padding: 0 10px;
+  }
+  .editor-layout:has(.transform-controls) .inspector {
+    height: 26dvh;
+  }
+  .check {
+    min-height: 44px;
+  }
+  input[type="checkbox"] {
+    min-width: 24px;
+    min-height: 24px;
+  }
+}

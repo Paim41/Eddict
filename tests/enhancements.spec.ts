@@ -119,6 +119,8 @@ test("locked base, before/after, replacement, undo and both transparent stickers
     .locator("input[type=file]")
     .first()
     .setInputFiles(await photo(page));
+  await expect(page.locator(".editor-layout")).toHaveAttribute("aria-busy", "false");
+  await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
   const canvas = page.locator("canvas.lower-canvas");
   const original = await canvas.evaluate((c: HTMLCanvasElement) =>
     c.toDataURL(),

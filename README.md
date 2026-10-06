@@ -72,3 +72,7 @@ Add approved screenshots here. Browser test screenshots are temporary verificati
 ## Deployment
 
 Deploy the repository `Paim41/Eddict` to Vercel as a Vite project. `vercel.json` declares the production build and `dist` output. No environment variables or server are required. Imported photos and videos remain in the visitor's browser even when the app is hosted.
+
+## Mobile composition controls
+
+Toggle Grid for a rule-of-thirds guide; it never appears in exports. Select a sticker or added photo to use the Size and Rotate sliders below the canvas. Size keeps proportions and rotation keeps the center in place. Lock size prevents corner or slider resizing while still allowing dragging and rotation; the lock is saved with the project. Larger touch handles and corner-only scaling help avoid stretching. Quick canvas sizes respect Maintain aspect ratio; uncheck it to use the exact preset dimensions.

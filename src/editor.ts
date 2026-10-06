@@ -19,6 +19,7 @@ export type Layer = FabricObject & {
   filterStack: FilterInstance[];
   adjustments: Adjustments;
   locked: boolean;
+  sizeLocked: boolean;
 };
 FabricObject.customProperties = [
   "id",
@@ -27,6 +28,7 @@ FabricObject.customProperties = [
   "filterStack",
   "adjustments",
   "locked",
+  "sizeLocked",
 ];
 Object.assign(FabricObject.ownDefaults, {
   cornerColor: "#fff",
@@ -34,7 +36,10 @@ Object.assign(FabricObject.ownDefaults, {
   borderColor: "#c45b89",
   transparentCorners: false,
   cornerStyle: "circle",
-  cornerSize: 12,
+  cornerSize: 18,
+  touchCornerSize: 44,
+  padding: 6,
+  lockScalingFlip: true,
 });
 export interface Snapshot {
   width: number;
@@ -71,6 +76,10 @@ export class Editor {
     this.canvas = new Canvas(element, {
       preserveObjectStacking: true,
       selection: false,
+      uniformScaling: true,
+      uniScaleKey: undefined,
+      allowTouchScrolling: false,
+      targetFindTolerance: 10,
     });
     this.observer = new ResizeObserver(() => this.fit());
     this.observer.observe(host);
@@ -165,7 +174,7 @@ export class Editor {
             layer.filterStack,
             layer.adjustments,
           );
-        if (layer.layerType === "base-image") this.lockBase(layer);
+        this.configureLayer(layer);
       }
       this.width = s.width;
       this.height = s.height;
@@ -249,7 +258,7 @@ export class Editor {
       adjustments: defaults(),
       locked: false,
     });
-    if (mode === "new") this.lockBase(image as unknown as Layer);
+    this.configureLayer(image as unknown as Layer);
     this.canvas.add(image);
     this.canvas.setActiveObject(image);
     this.fit();
@@ -300,6 +309,7 @@ export class Editor {
     });
     if (clone instanceof FabricImage)
       await this.renderer.render(clone, clone.filterStack, clone.adjustments);
+    this.configureLayer(clone);
     this.canvas.add(clone);
     this.canvas.setActiveObject(clone);
     this.commit();
@@ -310,12 +320,62 @@ export class Editor {
     o.set({
       lockMovementX: o.locked,
       lockMovementY: o.locked,
-      lockScalingX: o.locked,
-      lockScalingY: o.locked,
+      lockScalingX: o.locked || !!o.sizeLocked,
+      lockScalingY: o.locked || !!o.sizeLocked,
       lockRotation: o.locked,
       hasControls: !o.locked,
     });
+    this.configureLayer(o);
+    this.canvas.requestRenderAll();
     this.commit();
+  }
+  configureLayer(layer: Layer) {
+    if (layer.layerType === "base-image") {
+      this.lockBase(layer);
+      return;
+    }
+    layer.set({
+      lockScalingX: layer.locked || !!layer.sizeLocked,
+      lockScalingY: layer.locked || !!layer.sizeLocked,
+    });
+    layer.set({ cornerSize: 18, touchCornerSize: 44, padding: 6 });
+    layer.setControlsVisibility({
+      ml: false,
+      mr: false,
+      mt: false,
+      mb: false,
+      tl: !layer.sizeLocked,
+      tr: !layer.sizeLocked,
+      bl: !layer.sizeLocked,
+      br: !layer.sizeLocked,
+    });
+  }
+  toggleSizeLock() {
+    const layer = this.selected;
+    if (!layer || layer.locked || layer.layerType === "base-image") return;
+    layer.sizeLocked = !layer.sizeLocked;
+    this.configureLayer(layer);
+    this.canvas.requestRenderAll();
+    this.commit();
+  }
+  transformLayer(value: number, kind: "size" | "angle", commit = false) {
+    const layer = this.selected;
+    if (
+      !layer ||
+      layer.locked ||
+      layer.layerType === "base-image" ||
+      (kind === "size" && layer.sizeLocked)
+    )
+      return;
+    const center = layer.getCenterPoint();
+    if (kind === "size")
+      layer.scale(Math.max(0.01, ((value / 100) * this.width) / layer.width));
+    else layer.rotate(value);
+    layer.setPositionByOrigin(center, "center", "center");
+    layer.setCoords();
+    this.canvas.requestRenderAll();
+    this.notify();
+    if (commit) this.commit();
   }
   reorder(o: Layer, index: number) {
     this.canvas.moveObjectTo(
@@ -375,6 +435,7 @@ export class Editor {
       filterStack: old.filterStack.map((f) => ({ ...f })),
       adjustments: { ...old.adjustments },
       locked: old.locked,
+      sizeLocked: old.sizeLocked,
     });
     const base = old.layerType === "base-image";
     const targetW = base ? this.width : old.getScaledWidth(),
@@ -403,6 +464,7 @@ export class Editor {
         lockRotation: old.locked,
         hasControls: !old.locked,
       });
+    this.configureLayer(replacement as unknown as Layer);
     await this.renderer.render(replacement, old.filterStack, old.adjustments);
     const index = this.layers.indexOf(old);
     this.canvas.remove(old);
